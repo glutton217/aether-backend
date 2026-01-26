@@ -12,6 +12,11 @@ export default defineNitroConfig({
     deployConfig: true,
     // Enable Node compatibility layer where needed
     nodeCompat: true,
+    // Don't override dashboard settings - use wrangler.toml as base
+    wrangler: {
+      // Variables are set in Cloudflare dashboard, not in config file
+      // This prevents conflicts between local config and dashboard settings
+    },
   },
   experimental: {
     asyncContext: true,

@@ -1,10 +1,14 @@
 # Cloudflare Workers configuration
-# Note: Nitro will auto-generate/update this file when deployConfig: true is set
-# You can manually override settings here if needed
+# Note: Nitro will auto-generate/update .output/server/wrangler.json when deployConfig: true is set
+# This file serves as the base configuration that Nitro will use
 
 name = "aether-backend"
 compatibility_date = "2025-03-05"
 compatibility_flags = ["nodejs_compat"]
+
+# Environment variables are set in Cloudflare Dashboard (Settings > Variables)
+# Do NOT define them here to avoid conflicts with dashboard settings
+# Variables set in dashboard are automatically available at runtime
 
 # Cron Triggers for scheduled tasks
 # These patterns should match the scheduledTasks in nitro.config.ts

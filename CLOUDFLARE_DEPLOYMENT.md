@@ -102,6 +102,12 @@ The following changes have been made to support Cloudflare Workers deployment:
    npx wrangler deploy
    ```
    
+   **Note:** If you see a warning about local config differing from remote config, this is normal:
+   - Nitro generates `.output/server/wrangler.json` during build
+   - Your environment variables are set in the Cloudflare dashboard
+   - Wrangler will use the generated config for deployment, but dashboard variables are still available
+   - The warning is informational and won't prevent deployment
+   
    **Note:** If you're using Cloudflare Pages, you need to configure it to use Wrangler for deployment, or deploy as a Worker instead. The `cloudflare_module` preset builds for Workers, not Pages' Node.js runtime.
 
 ## Local Development
@@ -182,6 +188,19 @@ If you encounter build errors:
 - Verify cron patterns in `wrangler.toml` match `nitro.config.ts`
 - Check Cloudflare dashboard for cron trigger status
 - Test locally using: `npx wrangler dev --test-scheduled`
+
+### Configuration Warnings
+
+**Warning: "The local configuration being used differs from the remote configuration"**
+
+This warning is **normal and expected** when:
+- You set environment variables in the Cloudflare dashboard
+- Nitro generates a `wrangler.json` file during build
+- The generated config doesn't include dashboard variables
+
+**Solution:** This is just informational. Your dashboard variables will still be available at runtime. The deployment will work correctly. If you want to suppress the warning, you can:
+- Use `wrangler deploy --config .output/server/wrangler.json` to use only the generated config
+- Or ignore the warning - it doesn't affect functionality
 
 ## Additional Resources
 
