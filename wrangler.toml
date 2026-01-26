@@ -1,0 +1,34 @@
+# Cloudflare Workers configuration
+# Note: Nitro will auto-generate/update this file when deployConfig: true is set
+# You can manually override settings here if needed
+
+name = "aether-backend"
+compatibility_date = "2025-03-05"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron Triggers for scheduled tasks
+# These patterns should match the scheduledTasks in nitro.config.ts
+# Nitro will automatically create scheduled handlers for these tasks
+[triggers]
+crons = [
+  "0 0 * * *",    # Daily at midnight - jobs:clear-metrics:daily
+  "0 0 * * 0",    # Weekly on Sunday at midnight - jobs:clear-metrics:weekly
+  "0 0 1 * *"     # Monthly on 1st at midnight - jobs:clear-metrics:monthly
+]
+
+# Environment variables/secrets configuration:
+# Set secrets via CLI: wrangler secret put <SECRET_NAME>
+# Or via Cloudflare dashboard: Workers & Pages > Your Worker > Settings > Variables
+# 
+# Required secrets:
+# - DATABASE_URL (your Neon PostgreSQL connection string)
+# - CRYPTO_SECRET
+# - TMDB_API_KEY
+# - TRAKT_CLIENT_ID
+# - TRAKT_SECRET_ID
+#
+# Optional secrets:
+# - CAPTCHA (set to "true" or "false")
+# - CAPTCHA_CLIENT_KEY
+# - META_NAME
+# - META_DESCRIPTION

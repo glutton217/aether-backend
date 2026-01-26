@@ -4,7 +4,15 @@ import { version } from './server/utils/config';
 //https://nitro.unjs.io/config
 export default defineNitroConfig({
   srcDir: 'server',
+  preset: 'cloudflare_module',
+  // Cloudflare requires a recent compatibility date for Workers features.
   compatibilityDate: '2025-03-05',
+  cloudflare: {
+    // Generate Wrangler config during build
+    deployConfig: true,
+    // Enable Node compatibility layer where needed
+    nodeCompat: true,
+  },
   experimental: {
     asyncContext: true,
     tasks: true,

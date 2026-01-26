@@ -11,4 +11,4 @@ pnpm-lock.yaml
 .metrics_weekly.json
 .metrics_monthly.json
 .metrics_daily.json
-generated
+# generated - uncommented to allow committing Prisma client for Cloudflare Workers

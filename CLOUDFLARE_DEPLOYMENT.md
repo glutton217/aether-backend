@@ -1,0 +1,159 @@
+# Cloudflare Workers Deployment Guide
+
+This guide covers deploying the aether-backend to Cloudflare Workers with Neon PostgreSQL.
+
+## Prerequisites
+
+1. Cloudflare account (free tier works)
+2. Neon PostgreSQL database (free tier works)
+3. Node.js and npm installed
+
+## Configuration Summary
+
+The following changes have been made to support Cloudflare Workers deployment:
+
+### 1. Nitro Configuration (`nitro.config.ts`)
+- Added `preset: 'cloudflare_module'` for Cloudflare Workers
+- Enabled `deployConfig: true` to auto-generate Wrangler config
+- Enabled `nodeCompat: true` for Node.js compatibility layer
+- Scheduled tasks configured for Cloudflare Cron Triggers
+
+### 2. Prisma Configuration
+- Updated `prisma/schema.prisma` with `engineType = "client"` for edge compatibility
+- Updated `server/utils/prisma.ts` to use `@prisma/adapter-neon` instead of `@prisma/adapter-pg`
+- Uses Neon's serverless driver which works natively with Cloudflare Workers
+
+### 3. Dependencies Added
+- `wrangler` - Cloudflare Workers CLI
+- `@prisma/adapter-neon` - Prisma adapter for Neon PostgreSQL
+- `@neondatabase/serverless` - Neon's serverless database driver
+
+### 4. Wrangler Configuration (`wrangler.toml`)
+- Worker name: `aether-backend`
+- Compatibility date: `2025-03-05`
+- Node.js compatibility enabled
+- Cron triggers configured for scheduled tasks
+
+## Installation Steps
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Generate Prisma client:**
+   ```bash
+   npx prisma generate
+   ```
+
+3. **Login to Cloudflare:**
+   ```bash
+   npx wrangler login
+   ```
+
+4. **Set up Cloudflare secrets:**
+   
+   Set your environment variables as Cloudflare secrets:
+   ```bash
+   wrangler secret put DATABASE_URL
+   # Paste your Neon PostgreSQL connection string when prompted
+   
+   wrangler secret put CRYPTO_SECRET
+   wrangler secret put TMDB_API_KEY
+   wrangler secret put TRAKT_CLIENT_ID
+   wrangler secret put TRAKT_SECRET_ID
+   ```
+   
+   Optional secrets:
+   ```bash
+   wrangler secret put CAPTCHA
+   wrangler secret put CAPTCHA_CLIENT_KEY
+   wrangler secret put META_NAME
+   wrangler secret put META_DESCRIPTION
+   ```
+
+   **Note:** Your Neon `DATABASE_URL` should look like:
+   ```
+   postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/dbname?sslmode=require
+   ```
+
+5. **Build the project:**
+   ```bash
+   npm run build
+   ```
+
+6. **Deploy to Cloudflare:**
+   ```bash
+   npm run deploy:cloudflare
+   ```
+   
+   Or use Wrangler directly:
+   ```bash
+   npx wrangler deploy
+   ```
+
+## Local Development
+
+To test locally with Wrangler:
+
+```bash
+npm run preview:cloudflare
+```
+
+This will:
+1. Build the project
+2. Start Wrangler dev server
+3. Allow you to test Cloudflare Workers locally
+
+## Scheduled Tasks (Cron Jobs)
+
+The following scheduled tasks are configured:
+
+- **Daily**: `0 0 * * *` - Clears daily metrics at midnight
+- **Weekly**: `0 0 * * 0` - Clears weekly metrics every Sunday at midnight  
+- **Monthly**: `0 0 1 * *` - Clears monthly metrics on the 1st of each month at midnight
+
+These are automatically converted to Cloudflare Cron Triggers and will invoke the respective task handlers.
+
+## Database Connection
+
+The application uses Neon's serverless driver (`@neondatabase/serverless`) which:
+- Works natively with Cloudflare Workers (no TCP connections needed)
+- Uses WebSocket/HTTP protocols compatible with serverless environments
+- Handles connection pooling automatically
+- Works perfectly with Cloudflare Workers free tier
+
+## Troubleshooting
+
+### Build Errors
+
+If you encounter build errors:
+1. Ensure Prisma client is generated: `npx prisma generate`
+2. Check that all dependencies are installed: `npm install`
+3. Verify Node.js version compatibility (Node 18+ recommended)
+
+### Database Connection Issues
+
+- Verify your `DATABASE_URL` secret is set correctly
+- Ensure your Neon database allows connections from Cloudflare IPs
+- Check that SSL mode is enabled (`?sslmode=require`)
+
+### Cron Trigger Issues
+
+- Verify cron patterns in `wrangler.toml` match `nitro.config.ts`
+- Check Cloudflare dashboard for cron trigger status
+- Test locally using: `npx wrangler dev --test-scheduled`
+
+## Additional Resources
+
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [Nitro Cloudflare Preset](https://nitro.unjs.io/deploy/providers/cloudflare)
+- [Neon Serverless Driver](https://neon.tech/docs/serverless/serverless-driver)
+- [Prisma Cloudflare Workers Guide](https://www.prisma.io/docs/guides/cloudflare-workers)
+
+## Notes
+
+- Cloudflare Workers free tier has a 10-second CPU time limit per request
+- Ensure database queries complete within execution limits
+- Consider optimizing long-running queries for serverless environments
+- The `@prisma/adapter-pg` package is kept for local development compatibility

@@ -2,6 +2,8 @@ generator client {
   provider     = "prisma-client"
   output       = "../generated"
   moduleFormat = "esm"
+  // Required for Cloudflare Workers: avoids bundling Rust engines.
+  engineType   = "client"
 }
 
 datasource db {
