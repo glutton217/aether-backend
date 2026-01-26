@@ -16,19 +16,22 @@ crons = [
   "0 0 1 * *"     # Monthly on 1st at midnight - jobs:clear-metrics:monthly
 ]
 
-# Environment variables/secrets configuration:
-# Set secrets via CLI: wrangler secret put <SECRET_NAME>
-# Or via Cloudflare dashboard: Workers & Pages > Your Worker > Settings > Variables
+# Environment variables configuration:
+# Set variables via Cloudflare dashboard: Workers & Pages > Your Worker > Settings > Variables
+# Or via CLI: wrangler secret put <VARIABLE_NAME> (for sensitive values)
 # 
-# Required secrets:
+# Required variables (set in Cloudflare dashboard):
 # - DATABASE_URL (your Neon PostgreSQL connection string)
 # - CRYPTO_SECRET
 # - TMDB_API_KEY
 # - TRAKT_CLIENT_ID
 # - TRAKT_SECRET_ID
 #
-# Optional secrets:
+# Optional variables:
 # - CAPTCHA (set to "true" or "false")
 # - CAPTCHA_CLIENT_KEY
 # - META_NAME
 # - META_DESCRIPTION
+#
+# Note: Variables set in Cloudflare dashboard are automatically available as environment variables
+# Use "secrets" for sensitive values that shouldn't be visible in dashboard

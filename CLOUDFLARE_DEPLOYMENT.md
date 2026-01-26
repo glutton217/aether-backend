@@ -51,9 +51,23 @@ The following changes have been made to support Cloudflare Workers deployment:
    npx wrangler login
    ```
 
-4. **Set up Cloudflare secrets:**
+4. **Set up Cloudflare environment variables:**
    
-   Set your environment variables as Cloudflare secrets:
+   **Option A: Via Cloudflare Dashboard (Recommended)**
+   1. Go to Cloudflare Dashboard > Workers & Pages > Your Worker
+   2. Navigate to Settings > Variables
+   3. Add the following variables:
+      - `DATABASE_URL` - Your Neon PostgreSQL connection string
+      - `CRYPTO_SECRET`
+      - `TMDB_API_KEY`
+      - `TRAKT_CLIENT_ID`
+      - `TRAKT_SECRET_ID`
+      - `CAPTCHA` (optional, set to "true" or "false")
+      - `CAPTCHA_CLIENT_KEY` (optional)
+      - `META_NAME` (optional)
+      - `META_DESCRIPTION` (optional)
+   
+   **Option B: Via Wrangler CLI (for secrets)**
    ```bash
    wrangler secret put DATABASE_URL
    # Paste your Neon PostgreSQL connection string when prompted
@@ -64,18 +78,12 @@ The following changes have been made to support Cloudflare Workers deployment:
    wrangler secret put TRAKT_SECRET_ID
    ```
    
-   Optional secrets:
-   ```bash
-   wrangler secret put CAPTCHA
-   wrangler secret put CAPTCHA_CLIENT_KEY
-   wrangler secret put META_NAME
-   wrangler secret put META_DESCRIPTION
-   ```
-
    **Note:** Your Neon `DATABASE_URL` should look like:
    ```
    postgresql://user:password@ep-xxx.us-east-2.aws.neon.tech/dbname?sslmode=require
    ```
+   
+   **Important:** Variables set in the Cloudflare dashboard are automatically available as `process.env.VARIABLE_NAME` in your Worker code.
 
 5. **Build the project:**
    ```bash
@@ -148,6 +156,13 @@ If you're deploying via Cloudflare Pages dashboard:
 This means Cloudflare Pages is trying to run the Node.js server output. Solution:
 - Deploy as a **Cloudflare Worker** using `wrangler deploy`, not through Cloudflare Pages
 - Or configure Cloudflare Pages to use Wrangler for deployment instead of running Node.js
+
+**Error: `Disallowed operation called within global scope`**
+
+This error occurs when code tries to perform async I/O (like database connections) at module load time. Solution:
+- Prisma client has been updated to use lazy initialization - it only connects when called inside a handler
+- Ensure you're using the latest version of `server/utils/prisma.ts` with the Proxy-based lazy loading
+- Make sure no other code performs async operations at module load time
 
 ### Build Errors
 
