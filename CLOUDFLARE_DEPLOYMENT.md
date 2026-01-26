@@ -83,6 +83,8 @@ The following changes have been made to support Cloudflare Workers deployment:
    ```
 
 6. **Deploy to Cloudflare:**
+   
+   **Important:** Deploy as a Cloudflare Worker (not Cloudflare Pages). Use Wrangler directly:
    ```bash
    npm run deploy:cloudflare
    ```
@@ -91,6 +93,8 @@ The following changes have been made to support Cloudflare Workers deployment:
    ```bash
    npx wrangler deploy
    ```
+   
+   **Note:** If you're using Cloudflare Pages, you need to configure it to use Wrangler for deployment, or deploy as a Worker instead. The `cloudflare_module` preset builds for Workers, not Pages' Node.js runtime.
 
 ## Local Development
 
@@ -123,7 +127,27 @@ The application uses Neon's serverless driver (`@neondatabase/serverless`) which
 - Handles connection pooling automatically
 - Works perfectly with Cloudflare Workers free tier
 
+## Cloudflare Pages vs Workers
+
+**Important:** This configuration deploys to **Cloudflare Workers**, not Cloudflare Pages. 
+
+- **Cloudflare Workers**: Use `wrangler deploy` (recommended for this setup)
+- **Cloudflare Pages**: Uses a different runtime and requires different configuration
+
+If you're deploying via Cloudflare Pages dashboard:
+1. Set **Build command**: `npm run build`
+2. Set **Deploy command**: `npx wrangler deploy` (or leave empty and deploy manually)
+3. Or better: Deploy directly as a Worker using `wrangler deploy` from your CI/CD or locally
+
 ## Troubleshooting
+
+### Deployment Errors
+
+**Error: `ERR_UNSUPPORTED_ESM_URL_SCHEME: Received protocol 'cloudflare:'`**
+
+This means Cloudflare Pages is trying to run the Node.js server output. Solution:
+- Deploy as a **Cloudflare Worker** using `wrangler deploy`, not through Cloudflare Pages
+- Or configure Cloudflare Pages to use Wrangler for deployment instead of running Node.js
 
 ### Build Errors
 
