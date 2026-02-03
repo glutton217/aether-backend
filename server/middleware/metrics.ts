@@ -1,17 +1,27 @@
-import { recordHttpRequest } from '~/utils/metrics';
 import { scopedLogger } from '~/utils/logger';
 
 const log = scopedLogger('metrics-middleware');
+
+// Check if we're running in Cloudflare Workers
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
 
 // Paths we don't want to track metrics for
 const EXCLUDED_PATHS = ['/metrics', '/ping.txt', '/favicon.ico', '/robots.txt', '/sitemap.xml'];
 
 export default defineEventHandler(async event => {
+  // Skip metrics entirely in Cloudflare Workers (prom-client not compatible)
+  if (isCloudflareWorkers) {
+    return;
+  }
+  
   // Skip tracking excluded paths
   if (EXCLUDED_PATHS.includes(event.path)) {
     return;
   }
 
+  // Lazy import metrics to avoid loading prom-client in Workers
+  const { recordHttpRequest } = await import('~/utils/metrics');
+  
   const start = process.hrtime();
 
   try {

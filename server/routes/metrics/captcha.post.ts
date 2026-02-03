@@ -1,15 +1,19 @@
 import { z } from 'zod';
-import { getMetrics, recordCaptchaMetrics } from '~/utils/metrics';
 import { scopedLogger } from '~/utils/logger';
-import { setupMetrics } from '~/utils/metrics';
 
 const log = scopedLogger('metrics-captcha');
+
+// Check if we're running in Cloudflare Workers
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
 
 let isInitialized = false;
 
 async function ensureMetricsInitialized() {
+  if (isCloudflareWorkers) return;
+  
   if (!isInitialized) {
     log.info('Initializing metrics from captcha endpoint...', { evt: 'init_start' });
+    const { setupMetrics } = await import('~/utils/metrics');
     await setupMetrics();
     isInitialized = true;
     log.info('Metrics initialized from captcha endpoint', { evt: 'init_complete' });
@@ -17,6 +21,11 @@ async function ensureMetricsInitialized() {
 }
 
 export default defineEventHandler(async event => {
+  // Metrics not available in Cloudflare Workers
+  if (isCloudflareWorkers) {
+    return { message: 'Metrics not available in Cloudflare Workers environment' };
+  }
+  
   try {
     await ensureMetricsInitialized();
 
@@ -27,6 +36,8 @@ export default defineEventHandler(async event => {
       })
       .parse(body);
 
+    // Lazy import to avoid loading prom-client at module level
+    const { recordCaptchaMetrics } = await import('~/utils/metrics');
     recordCaptchaMetrics(validatedBody.success);
 
     return true;

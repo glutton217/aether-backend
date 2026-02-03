@@ -1,15 +1,19 @@
 import { z } from 'zod';
-import { getMetrics, recordProviderMetrics } from '~/utils/metrics';
 import { scopedLogger } from '~/utils/logger';
-import { setupMetrics } from '~/utils/metrics';
 
 const log = scopedLogger('metrics-providers');
+
+// Check if we're running in Cloudflare Workers
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
 
 let isInitialized = false;
 
 async function ensureMetricsInitialized() {
+  if (isCloudflareWorkers) return;
+  
   if (!isInitialized) {
     log.info('Initializing metrics from providers endpoint...', { evt: 'init_start' });
+    const { setupMetrics } = await import('~/utils/metrics');
     await setupMetrics();
     isInitialized = true;
     log.info('Metrics initialized from providers endpoint', { evt: 'init_complete' });
@@ -36,6 +40,11 @@ const metricsProviderInputSchema = z.object({
 });
 
 export default defineEventHandler(async event => {
+  // Metrics not available in Cloudflare Workers
+  if (isCloudflareWorkers) {
+    return { message: 'Metrics not available in Cloudflare Workers environment' };
+  }
+  
   // Handle both POST and PUT methods
   if (event.method !== 'POST' && event.method !== 'PUT') {
     throw createError({
@@ -52,6 +61,8 @@ export default defineEventHandler(async event => {
 
     const hostname = event.node.req.headers.origin?.slice(0, 255) ?? '<UNKNOWN>';
 
+    // Lazy import to avoid loading prom-client at module level
+    const { recordProviderMetrics } = await import('~/utils/metrics');
     // Use the simplified recordProviderMetrics function to handle all metrics recording
     recordProviderMetrics(validatedBody.items, hostname, validatedBody.tool);
 

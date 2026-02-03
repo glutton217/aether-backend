@@ -1,6 +1,8 @@
 import { defineTask } from '#imports';
 import { scopedLogger } from '../../../utils/logger';
-import { setupMetrics } from '../../../utils/metrics';
+
+// Check if we're running in Cloudflare Workers
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
 
 const logger = scopedLogger('tasks:clear-metrics:weekly');
 
@@ -10,10 +12,17 @@ export default defineTask({
     description: "Clear weekly metrics every Sunday at midnight",
   },
   async run() {
+    // Skip in Cloudflare Workers
+    if (isCloudflareWorkers) {
+      return { result: { status: "skipped", message: "Metrics not available in Cloudflare Workers" } };
+    }
+    
     logger.info("Clearing weekly metrics");
     const startTime = Date.now();
     
     try {
+      // Lazy import to avoid loading prom-client at module level
+      const { setupMetrics } = await import('../../../utils/metrics');
       // Clear and reinitialize weekly metrics
       await setupMetrics('weekly', true);
       
