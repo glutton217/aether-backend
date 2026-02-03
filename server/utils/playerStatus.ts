@@ -26,6 +26,9 @@ export interface PlayerStatus {
   timestamp: number;
 }
 
+// Check if we're running in Cloudflare Workers
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
+
 // In-memory store for player status data
 // Key: userId+roomCode, Value: Status data array
 export const playerStatusStore = new Map<string, Array<PlayerStatus>>();
@@ -48,5 +51,7 @@ function cleanupOldStatuses() {
   }
 }
 
-// Schedule cleanup every 5 minutes
-setInterval(cleanupOldStatuses, 5 * 60 * 1000);
+// Schedule cleanup every 5 minutes - only in Node.js environment, not Cloudflare Workers
+if (!isCloudflareWorkers && typeof setInterval !== 'undefined') {
+  setInterval(cleanupOldStatuses, 5 * 60 * 1000);
+}

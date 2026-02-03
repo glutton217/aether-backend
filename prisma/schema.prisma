@@ -4,6 +4,8 @@ generator client {
   moduleFormat = "esm"
   // Required for Cloudflare Workers: avoids bundling Rust engines.
   engineType   = "client"
+  // Cloudflare Workers runtime for edge-compatible generated code
+  runtime      = "cloudflare"
 }
 
 datasource db {

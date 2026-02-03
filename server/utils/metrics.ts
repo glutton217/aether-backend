@@ -1,8 +1,6 @@
 import { Counter, register, collectDefaultMetrics, Histogram, Summary, Registry } from 'prom-client';
 import { prisma } from './prisma';
 import { scopedLogger } from '~/utils/logger';
-import fs from 'fs';
-import path from 'path';
 
 const log = scopedLogger('metrics');
 const METRICS_FILE = '.metrics.json';
@@ -10,19 +8,51 @@ const METRICS_DAILY_FILE = '.metrics_daily.json';
 const METRICS_WEEKLY_FILE = '.metrics_weekly.json';
 const METRICS_MONTHLY_FILE = '.metrics_monthly.json';
 
-// Global registries
-const registries = {
-  default: register, // All-time metrics (never cleared)
-  daily: new Registry(),
-  weekly: new Registry(),
-  monthly: new Registry()
-};
+// Check if we're running in Cloudflare Workers (no filesystem access)
+const isCloudflareWorkers = typeof globalThis.caches !== 'undefined' && typeof process?.versions?.node === 'undefined';
 
-// Expose the registries on global for tasks to access
-if (typeof global !== 'undefined') {
-  global.metrics_daily = registries.daily;
-  global.metrics_weekly = registries.weekly;
-  global.metrics_monthly = registries.monthly;
+// Lazy load fs module - not available in Cloudflare Workers
+let fs: typeof import('fs') | null = null;
+let path: typeof import('path') | null = null;
+
+async function getFs() {
+  if (isCloudflareWorkers) return null;
+  if (!fs) {
+    try {
+      fs = await import('fs');
+      path = await import('path');
+    } catch {
+      return null;
+    }
+  }
+  return fs;
+}
+
+// Global registries - lazily initialized
+let registries: {
+  default: Registry;
+  daily: Registry;
+  weekly: Registry;
+  monthly: Registry;
+} | null = null;
+
+function getRegistries() {
+  if (!registries) {
+    registries = {
+      default: register, // All-time metrics (never cleared)
+      daily: new Registry(),
+      weekly: new Registry(),
+      monthly: new Registry()
+    };
+    
+    // Expose the registries on global for tasks to access (not in Workers)
+    if (!isCloudflareWorkers && typeof global !== 'undefined') {
+      (global as any).metrics_daily = registries.daily;
+      (global as any).metrics_weekly = registries.weekly;
+      (global as any).metrics_monthly = registries.monthly;
+    }
+  }
+  return registries;
 }
 
 export type Metrics = {
@@ -45,12 +75,17 @@ const metricsStore: Record<string, Metrics | null> = {
 };
 
 export function getMetrics(interval: 'default' | 'daily' | 'weekly' | 'monthly' = 'default') {
+  if (isCloudflareWorkers) {
+    // Return a no-op metrics object for Cloudflare Workers
+    return null;
+  }
   if (!metricsStore[interval]) throw new Error(`metrics for ${interval} not initialized`);
   return metricsStore[interval];
 }
 
 export function getRegistry(interval: 'default' | 'daily' | 'weekly' | 'monthly' = 'default') {
-  return registries[interval];
+  const regs = getRegistries();
+  return regs[interval];
 }
 
 async function createMetrics(registry: Registry, interval: string): Promise<Metrics> {
@@ -112,8 +147,15 @@ async function createMetrics(registry: Registry, interval: string): Promise<Metr
 }
 
 async function saveMetricsToFile(interval: string = 'default') {
+  // Skip filesystem operations in Cloudflare Workers
+  if (isCloudflareWorkers) return;
+  
   try {
-    const registry = registries[interval];
+    const fsModule = await getFs();
+    if (!fsModule) return;
+    
+    const regs = getRegistries();
+    const registry = regs[interval];
     if (!registry) return;
 
     const fileName = getMetricsFileName(interval);
@@ -123,7 +165,7 @@ async function saveMetricsToFile(interval: string = 'default') {
       metric => metric.name.startsWith('mw_') || metric.name.startsWith('http_request')
     );
 
-    fs.writeFileSync(fileName, JSON.stringify(relevantMetrics, null, 2));
+    fsModule.writeFileSync(fileName, JSON.stringify(relevantMetrics, null, 2));
 
     log.info(`${interval} metrics saved to file`, { evt: 'metrics_saved', interval });
   } catch (error) {
@@ -136,15 +178,21 @@ async function saveMetricsToFile(interval: string = 'default') {
 }
 
 async function loadMetricsFromFile(interval: string = 'default'): Promise<any[]> {
+  // Skip filesystem operations in Cloudflare Workers
+  if (isCloudflareWorkers) return [];
+  
   try {
+    const fsModule = await getFs();
+    if (!fsModule) return [];
+    
     const fileName = getMetricsFileName(interval);
 
-    if (!fs.existsSync(fileName)) {
+    if (!fsModule.existsSync(fileName)) {
       log.info(`No saved ${interval} metrics found`, { evt: 'no_saved_metrics', interval });
       return [];
     }
 
-    const data = fs.readFileSync(fileName, 'utf8');
+    const data = fsModule.readFileSync(fileName, 'utf8');
     const savedMetrics = JSON.parse(data);
     log.info(`Loaded saved ${interval} metrics`, {
       evt: 'metrics_loaded',
@@ -162,30 +210,37 @@ async function loadMetricsFromFile(interval: string = 'default'): Promise<any[]>
   }
 }
 
-// Periodically save all metrics
+// Periodically save all metrics - only in Node.js environment, not Cloudflare Workers
 const SAVE_INTERVAL = 60000; // Save every minute
-setInterval(() => {
-  Object.keys(registries).forEach(interval => {
-    saveMetricsToFile(interval);
+if (!isCloudflareWorkers && typeof setInterval !== 'undefined') {
+  setInterval(() => {
+    const regs = getRegistries();
+    Object.keys(regs).forEach(interval => {
+      saveMetricsToFile(interval);
+    });
+  }, SAVE_INTERVAL);
+}
+
+// Save metrics on process exit - only in Node.js environment
+if (!isCloudflareWorkers && typeof process !== 'undefined' && process.on) {
+  process.on('SIGTERM', async () => {
+    log.info('Saving all metrics before exit...', { evt: 'exit_save' });
+    const regs = getRegistries();
+    for (const interval of Object.keys(regs)) {
+      await saveMetricsToFile(interval);
+    }
+    process.exit(0);
   });
-}, SAVE_INTERVAL);
 
-// Save metrics on process exit
-process.on('SIGTERM', async () => {
-  log.info('Saving all metrics before exit...', { evt: 'exit_save' });
-  for (const interval of Object.keys(registries)) {
-    await saveMetricsToFile(interval);
-  }
-  process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-  log.info('Saving all metrics before exit...', { evt: 'exit_save' });
-  for (const interval of Object.keys(registries)) {
-    await saveMetricsToFile(interval);
-  }
-  process.exit(0);
-});
+  process.on('SIGINT', async () => {
+    log.info('Saving all metrics before exit...', { evt: 'exit_save' });
+    const regs = getRegistries();
+    for (const interval of Object.keys(regs)) {
+      await saveMetricsToFile(interval);
+    }
+    process.exit(0);
+  });
+}
 
 let defaultMetricsRegistered = false;
 const metricsRegistered: Record<string, boolean> = {
@@ -196,10 +251,17 @@ const metricsRegistered: Record<string, boolean> = {
 };
 
 export async function setupMetrics(interval: 'default' | 'daily' | 'weekly' | 'monthly' = 'default', clear: boolean = false) {
+  // Skip metrics setup in Cloudflare Workers
+  if (isCloudflareWorkers) {
+    log.info(`Skipping ${interval} metrics setup in Cloudflare Workers`);
+    return;
+  }
+  
   try {
     log.info(`Setting up ${interval} metrics...`, { evt: 'start', interval });
 
-    const registry = registries[interval];
+    const regs = getRegistries();
+    const registry = regs[interval];
     // Only clear registry if explicitly requested (e.g., by scheduled task)
     let skipRestore = false;
     if (clear) {
@@ -209,8 +271,9 @@ export async function setupMetrics(interval: 'default' | 'daily' | 'weekly' | 'm
       // Remove persisted snapshot so we truly start fresh for this interval
       try {
         const fileName = getMetricsFileName(interval);
-        if (fs.existsSync(fileName)) {
-          fs.unlinkSync(fileName);
+        const fsModule = await getFs();
+        if (fsModule && fsModule.existsSync(fileName)) {
+          fsModule.unlinkSync(fileName);
           log.info(`Deleted persisted ${interval} metrics file`, { evt: 'deleted_metrics_file', interval });
         }
       } catch (err) {
